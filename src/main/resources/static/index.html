@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NotionGPT — Biblioteca</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@300;400&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <span class="logo-name">Notion<span>GPT</span></span>
+      <span class="logo-tag">v0.1.0 · biblioteca pessoal</span>
+    </div>
+    <div class="header-right">
+      <div class="stat-pill" id="stat-count">carregando...</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="library-header">
+      <div class="library-title">
+        Acervo
+        <em>seus resumos de estudo</em>
+      </div>
+      <button class="btn-add" onclick="openModal()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Adicionar documento
+      </button>
+    </div>
+
+    <div class="search-bar">
+      <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="6" cy="6" r="4.5" stroke="#3d4d6b" stroke-width="1.5"/>
+        <path d="M10 10l2.5 2.5" stroke="#3d4d6b" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <input type="text" placeholder="Buscar por nome do documento..." id="search-input" oninput="filterDocs()">
+    </div>
+
+    <div class="doc-grid" id="doc-grid"></div>
+  </main>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
+    <div class="modal">
+      <div class="modal-title">Adicionar documento</div>
+      <div class="modal-sub">Selecione o arquivo do seu computador</div>
+
+      <label class="form-label" for="doc-file-input">Arquivo</label>
+      <input class="form-input" id="doc-file-input" type="file" accept=".md,.txt,.pdf,.docx">
+
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+        <button class="btn-confirm" onclick="addDocument()">Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FLOATING CHAT -->
+  <button class="chat-btn" onclick="toggleChat()" title="Abrir assistente">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <path d="M2 5a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2H8l-4 4V15H4a2 2 0 01-2-2V5z"
+            fill="currentColor"/>
+    </svg>
+  </button>
+
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-dot"></div>
+      <span class="chat-header-title">NotionGPT</span>
+      <span class="chat-header-sub">online</span>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg ai">Olá! Pergunte-me qualquer coisa sobre seus resumos de estudo.</div>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chat-input" rows="1"
+                placeholder="Faça uma pergunta..."
+                onkeydown="handleKey(event)"></textarea>
+      <button class="btn-send" id="btn-send" onclick="sendMessage()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M1 7h12M8 2l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

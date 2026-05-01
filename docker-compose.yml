@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.2-pg18-trixie
+    container_name: notiongpt-db
+    environment:
+      POSTGRES_DB: notiongpt
+      POSTGRES_USER: ${DB_USER_PGVECTOR}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+volumes:
+  pgdata:

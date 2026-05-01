@@ -2,6 +2,10 @@ package br.com.bssantos.rag.service;
 
 import br.com.bssantos.rag.dto.DocumentResponse;
 import br.com.bssantos.rag.entity.StudyDocument;
+import br.com.bssantos.rag.exception.DocumentoInvalidoException;
+import br.com.bssantos.rag.exception.DocumentoNaoEncontradoException;
+import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
+import br.com.bssantos.rag.exception.IdInvalidoException;
 import br.com.bssantos.rag.repository.DocumentRepository;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentParser;
@@ -44,9 +48,11 @@ public class DocumentService {
     public void deletaDocumento(String id) {
         try {
             UUID uuid = UUID.fromString(id);
-            documentRepository.deleteById(uuid);
+            StudyDocument studyDocument = documentRepository.findById(uuid).orElseThrow(
+                    () -> new DocumentoNaoEncontradoException("Nenhum documento foi encontrado para o ID especificado"));
+            documentRepository.delete(studyDocument);
         } catch (IllegalArgumentException ex) {
-            throw new RuntimeException("O Id informado é inválido");
+            throw new IdInvalidoException("O Id informado é inválido");
         }
     }
 
@@ -56,18 +62,38 @@ public class DocumentService {
     }
 
     public DocumentResponse salvaDocumento(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new DocumentoInvalidoException("O arquivo enviado está vazio");
+        }
+
         UUID uuid = UUID.randomUUID();
+        Document document;
         String fileName = extraFileName(file, uuid);
-        Document document = extraiConteudoDoArquivo(file);
+        try {
+            document = extraiConteudoDoArquivo(file);
+        } catch (IOException ex) {
+            throw new DocumentoInvalidoException("O documento fornecido é inválido ou está corrompido");
+        }
 
         List<TextSegment> textSegments = geraOsTextSegments(document, uuid);
 
-        List<Embedding> embeddings = embeddingModel.embedAll(textSegments).content();
-        embeddingStore.addAll(embeddings, textSegments);
+        List<Embedding> embeddings;
+        try {
+            embeddings = embeddingModel.embedAll(textSegments).content();
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Estamos enfrentando problemas com a API da CohereClient. Tente novamente mais tarde");
+        }
+
+        try {
+            embeddingStore.addAll(embeddings, textSegments);
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Estamos enfrentando problema com a conexão com o banco de dados");
+        }
+
         StudyDocument studyDocument = new StudyDocument(uuid, fileName, fileName, Instant.now());
         documentRepository.save(studyDocument);
-
         return new DocumentResponse(studyDocument);
+
     }
 
     private String extraFileName(MultipartFile file, UUID uuid) {
@@ -80,12 +106,8 @@ public class DocumentService {
         return fileName;
     }
 
-    private Document extraiConteudoDoArquivo(MultipartFile file) {
-        try {
-            return parser.parse(file.getInputStream());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    private Document extraiConteudoDoArquivo(MultipartFile file) throws IOException {
+        return parser.parse(file.getInputStream());
     }
 
     private List<TextSegment> geraOsTextSegments(Document document, UUID uuid) {

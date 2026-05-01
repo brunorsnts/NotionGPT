@@ -2,6 +2,7 @@ package br.com.bssantos.rag.service;
 
 import br.com.bssantos.rag.dto.ChatRequest;
 import br.com.bssantos.rag.dto.ChatResponse;
+import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -29,12 +30,20 @@ public class QueryService {
 
     public ChatResponse askIA(ChatRequest request) {
         List<EmbeddingMatch<TextSegment>> result = result(searchRequest(embed(request)));
-        return chatService.ask(request.query(), result);
+        try {
+            return chatService.ask(request.query(), result);
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Houve um problema na comunicação com a API da LLM");
+        }
     }
 
     private List<EmbeddingMatch<TextSegment>> result(EmbeddingSearchRequest searchRequest) {
-        EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
-        return searchResult.matches();
+        try {
+            EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
+            return searchResult.matches();
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Estamos enfrentando problema com a conexão com o banco de dados");
+        }
     }
 
     private EmbeddingSearchRequest searchRequest(Embedding embedding) {
@@ -45,6 +54,10 @@ public class QueryService {
     }
 
     private Embedding embed(ChatRequest request) {
-        return embeddingModel.embed(request.query()).content();
+        try {
+            return embeddingModel.embed(request.query()).content();
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Estamos enfrentando problemas com a API da CohereClient. Tente novamente mais tarde");
+        }
     }
 }

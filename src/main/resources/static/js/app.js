@@ -4,27 +4,112 @@
 let allDocs = [];
 
 // ─────────────────────────────────────────────
+// CONFIRM DIALOG
+// ─────────────────────────────────────────────
+
+let confirmCallback = null;
+
+function showConfirm(docName, onConfirm) {
+  document.getElementById('confirm-msg').textContent = `"${docName}" será removido permanentemente.`;
+  confirmCallback = onConfirm;
+  document.getElementById('confirm-overlay').classList.add('open');
+  document.getElementById('confirm-ok').onclick = () => { closeConfirm(); onConfirm(); };
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  confirmCallback = null;
+}
+
+function closeConfirmOutside(e) {
+  if (e.target.id === 'confirm-overlay') closeConfirm();
+}
+
+// ─────────────────────────────────────────────
+// TOASTS
+// ─────────────────────────────────────────────
+
+function showError(message) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <svg class="toast-icon" width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <circle cx="7.5" cy="7.5" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+      <path d="M7.5 4.5v3M7.5 10h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <div class="toast-body">
+      <div class="toast-title">Erro</div>
+      <div class="toast-msg">${message}</div>
+    </div>
+    <button class="toast-close" onclick="removeToast(this.closest('.toast'))">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+        <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>`;
+  container.appendChild(toast);
+  setTimeout(() => removeToast(toast), 5000);
+}
+
+function removeToast(toast) {
+  if (!toast || !toast.isConnected) return;
+  toast.classList.add('removing');
+  setTimeout(() => toast.remove(), 200);
+}
+
+function showUndoToast(docName, onUndo) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast toast-undo';
+  toast.innerHTML = `
+    <svg class="toast-icon" width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M2 7.5a5.5 5.5 0 1010.5 2M2 7.5V4m0 3.5H5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="toast-body">
+      <div class="toast-title">Removendo documento</div>
+      <div class="toast-msg">"${docName}"</div>
+    </div>
+    <button class="toast-action">Cancelar</button>
+    <div class="toast-progress"></div>`;
+
+  let cancelled = false;
+  toast.querySelector('.toast-action').onclick = () => {
+    cancelled = true;
+    removeToast(toast);
+    onUndo();
+  };
+
+  container.appendChild(toast);
+  return { getCancelled: () => cancelled, toast };
+}
+
+// ─────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────
 
 async function apiGetDocuments() {
   const res = await fetch('/documents');
   const data = await res.json();
+  if (!res.ok) { showError(data.detail || 'Erro ao carregar documentos.'); return []; }
   return data.content;
 }
 
 async function apiAddDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch('/documents', {
-    method: 'POST',
-    body: formData
-  });
-  return res.json();
+  const res = await fetch('/documents', { method: 'POST', body: formData });
+  const data = await res.json();
+  if (!res.ok) { showError(data.detail || 'Erro ao adicionar documento.'); return null; }
+  return data;
 }
 
 async function apiDeleteDocument(id) {
-  await fetch(`/documents/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/documents/${id}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    showError(data.detail || 'Erro ao remover documento.');
+    return false;
+  }
   return true;
 }
 
@@ -34,7 +119,9 @@ async function apiQuery(query) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query })
   });
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) { showError(data.detail || 'Erro ao processar consulta.'); return null; }
+  return data;
 }
 
 // ─────────────────────────────────────────────
@@ -105,10 +192,22 @@ function formatDate(iso) {
 }
 
 async function deleteDoc(id) {
-  await apiDeleteDocument(id);
-  allDocs = allDocs.filter(d => d.id !== id);
-  filterDocs();
-  updateStat();
+  const doc = allDocs.find(d => d.id === id);
+  if (!doc) return;
+
+  showConfirm(doc.name, () => {
+    const { getCancelled, toast } = showUndoToast(doc.name, () => {});
+
+    setTimeout(async () => {
+      if (getCancelled()) return;
+      removeToast(toast);
+      const ok = await apiDeleteDocument(id);
+      if (!ok) return;
+      allDocs = allDocs.filter(d => d.id !== id);
+      filterDocs();
+      updateStat();
+    }, 5000);
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -128,6 +227,8 @@ async function addDocument() {
   if (!file) return;
 
   const doc = await apiAddDocument(file);
+  if (!doc) return;
+
   allDocs.unshift(doc);
   filterDocs();
   updateStat();
@@ -165,10 +266,10 @@ async function sendMessage() {
   const loading = appendLoading();
   document.getElementById('btn-send').disabled = true;
 
-  const { reply } = await apiQuery(query);
+  const data = await apiQuery(query);
 
   loading.remove();
-  appendMsg(reply, 'ai');
+  if (data) appendMsg(data.reply, 'ai');
   document.getElementById('btn-send').disabled = false;
 }
 
@@ -197,6 +298,47 @@ function appendLoading() {
 }
 
 // ─────────────────────────────────────────────
+// CHAT RESIZE
+// ─────────────────────────────────────────────
+
+function initChatResize() {
+  const panel  = document.getElementById('chat-panel');
+  const handle = document.getElementById('chat-resize-handle');
+
+  const MIN_W = 280, MAX_W = 640;
+  const MIN_H = 300, MAX_H = Math.floor(window.innerHeight * 0.85);
+
+  let startX, startY, startW, startH;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startY = e.clientY;
+    startW = panel.offsetWidth;
+    startH = panel.offsetHeight;
+    panel.style.transition = 'none';
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  function onMove(e) {
+    const w = Math.min(MAX_W, Math.max(MIN_W, startW + (startX - e.clientX)));
+    const h = Math.min(MAX_H, Math.max(MIN_H, startH + (startY - e.clientY)));
+    panel.style.width  = w + 'px';
+    panel.style.height = h + 'px';
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    panel.style.transition = '';
+    document.body.style.userSelect = '';
+  }
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 loadDocuments();
+initChatResize();

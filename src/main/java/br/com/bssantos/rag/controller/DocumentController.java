@@ -42,12 +42,8 @@ public class DocumentController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deletaDocumento(@PathVariable String id) {
-        try {
-            documentService.deletaDocumento(id);
-            return ResponseEntity.ok().build();
-        } catch (RuntimeException ex) {
-            return ResponseEntity.badRequest().build();
-        }
+        documentService.deletaDocumento(id);
+        return ResponseEntity.ok().build();
     }
 
 }

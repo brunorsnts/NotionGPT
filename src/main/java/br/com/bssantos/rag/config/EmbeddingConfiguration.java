@@ -4,7 +4,7 @@ import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.cohere.CohereEmbeddingModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
-import dev.langchain4j.store.embedding.inmemory.InMemoryEmbeddingStore;
+import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,7 +34,17 @@ public class EmbeddingConfiguration {
     }
 
     @Bean
-    public EmbeddingStore<TextSegment> embeddingStore() {
-        return new InMemoryEmbeddingStore<>();
+    public EmbeddingStore<TextSegment> embeddingStore(@Value("${spring.datasource.username}") String username,
+                                                      @Value("${spring.datasource.password}") String password) {
+
+        return PgVectorEmbeddingStore.builder()
+                .host("localhost")
+                .port(5433)
+                .user(username)
+                .password(password)
+                .database("notiongpt")
+                .table("embeddings")
+                .dimension(embeddingDocument().dimension())
+                .build();
     }
 }

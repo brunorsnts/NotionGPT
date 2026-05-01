@@ -15,13 +15,13 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
-public class EmbeddingService {
+public class QueryService {
 
     private final EmbeddingModel embeddingModel;
     private final ChatService chatService;
     private final EmbeddingStore<TextSegment> embeddingStore;
 
-    public EmbeddingService(@Qualifier("embeddingQuery") EmbeddingModel embeddingModel, ChatService chatService, EmbeddingStore<TextSegment> embeddingStore) {
+    public QueryService(@Qualifier("embeddingQuery") EmbeddingModel embeddingModel, ChatService chatService, EmbeddingStore<TextSegment> embeddingStore) {
         this.embeddingModel = embeddingModel;
         this.chatService = chatService;
         this.embeddingStore = embeddingStore;

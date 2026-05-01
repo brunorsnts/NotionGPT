@@ -8,6 +8,7 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,7 +21,7 @@ public class RagApplication implements CommandLineRunner {
     private final EmbeddingModel embeddingModel;
     private final EmbeddingStore<TextSegment> embeddingStore;
 
-    public RagApplication(EmbeddingModel embeddingModel, EmbeddingStore<TextSegment> embeddingStore) {
+    public RagApplication(@Qualifier("embeddingDocument") EmbeddingModel embeddingModel, EmbeddingStore<TextSegment> embeddingStore) {
         this.embeddingModel = embeddingModel;
         this.embeddingStore = embeddingStore;
     }

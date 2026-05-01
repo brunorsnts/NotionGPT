@@ -9,6 +9,7 @@ import dev.langchain4j.store.embedding.EmbeddingMatch;
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.EmbeddingStore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -20,7 +21,7 @@ public class EmbeddingService {
     private final ChatService chatService;
     private final EmbeddingStore<TextSegment> embeddingStore;
 
-    public EmbeddingService(EmbeddingModel embeddingModel, ChatService chatService, EmbeddingStore<TextSegment> embeddingStore) {
+    public EmbeddingService(@Qualifier("embeddingQuery") EmbeddingModel embeddingModel, ChatService chatService, EmbeddingStore<TextSegment> embeddingStore) {
         this.embeddingModel = embeddingModel;
         this.chatService = chatService;
         this.embeddingStore = embeddingStore;

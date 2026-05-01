@@ -1,23 +1,26 @@
 # NotionGPT
 
-Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se estritamente nos meus resumos de estudo exportados do Notion.
+Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se estritamente nos meus resumos de estudo.
 
 ## Stack
 
 - Java 21 + Spring Boot 3.5
 - [LangChain4J](https://github.com/langchain4j/langchain4j) 1.13.1
-- Anthropic Claude (claude-haiku-4-5) como modelo de chat
-- BGE Small EN v1.5 (quantizado) como modelo de embeddings
-- Banco vetorial em memória (`InMemoryEmbeddingStore`)
+- Anthropic Claude (`claude-haiku-4-5`) como modelo de chat
+- Cohere `embed-multilingual-light-v3.0` como modelo de embeddings
+- PostgreSQL + pgvector como banco vetorial (`PgVectorEmbeddingStore`)
+- Docker para o banco de dados
 
 ## Arquitetura (Naive RAG)
 
 ```
-Inicialização (ingestão)
-  FileSystemDocumentLoader → DocumentByParagraphSplitter → EmbeddingModel → InMemoryEmbeddingStore
+Ingestão (POST /documents)
+  MultipartFile → ApacheTikaDocumentParser → DocumentByParagraphSplitter
+    → CohereEmbeddingModel (search_document) → PgVectorEmbeddingStore + PostgreSQL (metadados)
 
-Por requisição (retrieval + geração)
-  POST /query → embeda a pergunta → EmbeddingStore.search() → monta o prompt → ChatModel → resposta
+Consulta (POST /query)
+  Pergunta → CohereEmbeddingModel (search_query) → EmbeddingStore.search()
+    → monta prompt com contexto → Claude → resposta
 ```
 
 ## Configuração
@@ -26,20 +29,23 @@ Por requisição (retrieval + geração)
 
 - Java 21+
 - Maven
+- Docker
 - Chave de API da Anthropic
+- Chave de API da Cohere
 
-### Variável de ambiente
+### Variáveis de ambiente
 
 ```bash
 export ANTHROPIC_API_KEY=sua_chave_aqui
+export COHERE_API_KEY=sua_chave_aqui
+export DB_USER_PGVECTOR=seu_usuario
+export DB_PASSWORD=sua_senha
 ```
 
-### Notas de estudo
+### Banco de dados
 
-Coloque seus arquivos `.md` no diretório configurado em `RagApplication.java`:
-
-```java
-FileSystemDocumentLoader.loadDocuments("caminho/para/seus/resumos");
+```bash
+docker compose up -d
 ```
 
 ### Executar
@@ -48,7 +54,26 @@ FileSystemDocumentLoader.loadDocuments("caminho/para/seus/resumos");
 mvn spring-boot:run
 ```
 
+A aplicação sobe em `http://localhost:8080` com interface web para gerenciar documentos e conversar.
+
 ## API
+
+### POST /documents
+
+Faz upload e indexa um documento (PDF, DOCX, TXT, MD).
+
+```
+Content-Type: multipart/form-data
+field: file
+```
+
+### GET /documents
+
+Retorna os documentos indexados (paginado).
+
+### DELETE /documents/{id}
+
+Remove um documento pelo ID.
 
 ### POST /query
 

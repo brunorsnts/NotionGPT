@@ -5,12 +5,6 @@ let allDocs = [];
 
 // ─────────────────────────────────────────────
 // API
-// Mude MOCK para false quando os endpoints estiverem prontos.
-//
-// GET    /documents         → [{ id, name, path, addedAt }]
-// POST   /documents         → { path, name } → { id, name, path, addedAt }
-// DELETE /documents/{id}    → 204
-// POST   /query             → { query } → { reply }
 // ─────────────────────────────────────────────
 
 async function apiGetDocuments() {

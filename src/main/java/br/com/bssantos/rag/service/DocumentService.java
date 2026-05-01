@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -66,7 +67,7 @@ public class DocumentService {
         StudyDocument studyDocument = new StudyDocument(uuid, fileName, fileName, Instant.now());
         documentRepository.save(studyDocument);
 
-        return new DocumentResponse(uuid, fileName,"//", Instant.now());
+        return new DocumentResponse(studyDocument);
     }
 
     private String extraFileName(MultipartFile file, UUID uuid) {
@@ -74,7 +75,7 @@ public class DocumentService {
         if (fileName == null || fileName.isBlank()) {
             fileName = "documento_" + uuid.toString().substring(0, 8) + ".pdf";
         } else {
-            fileName = new java.io.File(fileName).getName();
+            fileName = Path.of(fileName).getFileName().toString();
         }
         return fileName;
     }

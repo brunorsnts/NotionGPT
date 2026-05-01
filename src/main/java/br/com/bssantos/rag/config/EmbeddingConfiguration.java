@@ -44,7 +44,7 @@ public class EmbeddingConfiguration {
                 .password(password)
                 .database("notiongpt")
                 .table("embeddings")
-                .dimension(embeddingDocument().dimension())
+                .dimension(384)
                 .build();
     }
 }

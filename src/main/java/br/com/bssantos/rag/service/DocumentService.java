@@ -96,6 +96,17 @@ public class DocumentService {
 
     }
 
+
+    private List<TextSegment> geraOsTextSegments(Document document, UUID uuid) {
+        return splitter.split(document)
+                .stream()
+                .map(ts -> {
+                    ts.metadata().put("document_id", uuid.toString());
+                    return ts;
+                })
+                .toList();
+    }
+
     private String extraFileName(MultipartFile file, UUID uuid) {
         String fileName = file.getOriginalFilename();
         if (fileName == null || fileName.isBlank()) {
@@ -108,15 +119,5 @@ public class DocumentService {
 
     private Document extraiConteudoDoArquivo(MultipartFile file) throws IOException {
         return parser.parse(file.getInputStream());
-    }
-
-    private List<TextSegment> geraOsTextSegments(Document document, UUID uuid) {
-        return splitter.split(document)
-                .stream()
-                .map(ts -> {
-                    ts.metadata().put("document_id", uuid.toString());
-                    return ts;
-                })
-                .toList();
     }
 }

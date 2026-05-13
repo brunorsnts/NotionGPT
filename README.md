@@ -1,6 +1,6 @@
 # NotionGPT
 
-Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se estritamente nos meus resumos de estudo.
+Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se estritamente nos meus resumos de estudo sincronizados do Notion.
 
 ## Stack
 
@@ -14,8 +14,10 @@ Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se 
 ## Arquitetura (Naive RAG)
 
 ```
-Ingestão (POST /documents)
-  MultipartFile → ApacheTikaDocumentParser → DocumentByParagraphSplitter
+Ingestão (sync diário com Notion — @Scheduled, meia-noite)
+  NotionClient.buscarPaginas() → deduplicação por lastEditedTime
+    → NotionClient.buscarBlocos(pageId) → NotionBlockExtractor.extract()
+    → DocumentByParagraphSplitter(1500, 200)
     → CohereEmbeddingModel (search_document) → PgVectorEmbeddingStore + PostgreSQL (metadados)
 
 Consulta (POST /query)
@@ -32,12 +34,15 @@ Consulta (POST /query)
 - Docker
 - Chave de API da Anthropic
 - Chave de API da Cohere
+- Chave de API do Notion
 
 ### Variáveis de ambiente
 
 ```bash
 export ANTHROPIC_API_KEY=sua_chave_aqui
 export COHERE_API_KEY=sua_chave_aqui
+export NOTION_API_KEY=sua_chave_aqui
+export NOTION_DATA_SOURCE_ID=id_do_banco_cursos
 export DB_USER_PGVECTOR=seu_usuario
 export DB_PASSWORD=sua_senha
 ```
@@ -54,18 +59,9 @@ docker compose up -d
 mvn spring-boot:run
 ```
 
-A aplicação sobe em `http://localhost:8080` com interface web para gerenciar documentos e conversar.
+A aplicação sobe em `http://localhost:8080`. O sync com o Notion ocorre automaticamente todo dia à meia-noite.
 
 ## API
-
-### POST /documents
-
-Faz upload e indexa um documento (PDF, DOCX, TXT, MD).
-
-```
-Content-Type: multipart/form-data
-field: file
-```
 
 ### GET /documents
 
@@ -73,7 +69,7 @@ Retorna os documentos indexados (paginado).
 
 ### DELETE /documents/{id}
 
-Remove um documento pelo ID.
+Remove um documento pelo ID. Retorna `204 No Content`.
 
 ### POST /query
 

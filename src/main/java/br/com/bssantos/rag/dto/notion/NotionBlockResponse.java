@@ -8,7 +8,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashMap;
 import java.util.Map;
 
-@JsonIgnoreProperties({"object", "id", "parent", "created_time", "lasted_edited_time", "created_by", "last_edited_by", "in_trash"})
+@JsonIgnoreProperties({"object", "id", "parent", "created_time", "last_edited_time", "created_by", "last_edited_by", "in_trash"})
 public class NotionBlockResponse {
         String type;
         @JsonProperty(value = "has_children") boolean hasChildren;

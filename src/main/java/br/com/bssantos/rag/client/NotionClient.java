@@ -16,7 +16,7 @@ public class NotionClient {
     private final RestClient restClient;
     private final String dataSourceId;
 
-    public NotionClient(RestClient restClient, @Value("${notion-database-id}") String dataSourceId) {
+    public NotionClient(RestClient restClient, @Value("${notion-data-source-id}") String dataSourceId) {
         this.restClient = restClient;
         this.dataSourceId = dataSourceId;
     }

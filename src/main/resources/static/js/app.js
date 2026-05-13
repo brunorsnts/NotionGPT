@@ -2,6 +2,8 @@
 // ESTADO
 // ─────────────────────────────────────────────
 let allDocs = [];
+let currentPage = 0;
+let pageInfo = { totalPages: 1, first: true, last: true };
 
 // ─────────────────────────────────────────────
 // CONFIRM DIALOG
@@ -87,19 +89,10 @@ function showUndoToast(docName, onUndo) {
 // API
 // ─────────────────────────────────────────────
 
-async function apiGetDocuments() {
-  const res = await fetch('/documents');
+async function apiGetDocuments(page = 0) {
+  const res = await fetch(`/documents?page=${page}`);
   const data = await res.json();
-  if (!res.ok) { showError(data.detail || 'Erro ao carregar documentos.'); return []; }
-  return data.content;
-}
-
-async function apiAddDocument(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await fetch('/documents', { method: 'POST', body: formData });
-  const data = await res.json();
-  if (!res.ok) { showError(data.detail || 'Erro ao adicionar documento.'); return null; }
+  if (!res.ok) { showError(data.detail || 'Erro ao carregar documentos.'); return null; }
   return data;
 }
 
@@ -128,10 +121,16 @@ async function apiQuery(query) {
 // DOCUMENTOS
 // ─────────────────────────────────────────────
 
-async function loadDocuments() {
-  allDocs = await apiGetDocuments();
+async function loadDocuments(page = 0) {
+  const data = await apiGetDocuments(page);
+  if (!data) return;
+  allDocs = data.content;
+  currentPage = data.number;
+  pageInfo = { totalPages: data.totalPages, first: data.first, last: data.last, totalElements: data.totalElements };
   renderDocs(allDocs);
   updateStat();
+  updateSyncInfo();
+  renderPagination();
 }
 
 function renderDocs(docs) {
@@ -158,7 +157,7 @@ function renderDocs(docs) {
         </div>
         <div class="doc-info">
           <div class="doc-name" title="${doc.name}">${doc.name}</div>
-          <div class="doc-path">${doc.path}</div>
+          <div class="doc-path"><span class="notion-badge">↗ Notion</span></div>
         </div>
       </div>
       <div class="doc-meta">
@@ -176,15 +175,44 @@ function renderDocs(docs) {
 
 function filterDocs() {
   const q = document.getElementById('search-input').value.toLowerCase();
-  renderDocs(allDocs.filter(d =>
-    d.name.toLowerCase().includes(q) || d.path.toLowerCase().includes(q)
-  ));
+  renderDocs(allDocs.filter(d => d.name.toLowerCase().includes(q)));
+}
+
+function updateSyncInfo() {
+  const el = document.getElementById('sync-info');
+  if (!el) return;
+  if (!allDocs.length) { el.textContent = ''; return; }
+  const latest = allDocs.reduce((a, b) => new Date(a.addedAt) > new Date(b.addedAt) ? a : b);
+  el.innerHTML = `último sync: <strong>${formatDate(latest.addedAt)}</strong>`;
 }
 
 function updateStat() {
-  const n = allDocs.length;
+  const n = pageInfo.totalElements ?? allDocs.length;
   document.getElementById('stat-count').innerHTML =
     `<strong>${n}</strong> documento${n !== 1 ? 's' : ''} indexado${n !== 1 ? 's' : ''}`;
+}
+
+function renderPagination() {
+  let el = document.getElementById('pagination');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'pagination';
+    el.className = 'pagination';
+    document.getElementById('doc-grid').after(el);
+  }
+  if (pageInfo.totalPages <= 1) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <button class="page-btn" onclick="loadDocuments(${currentPage - 1})" ${pageInfo.first ? 'disabled' : ''}>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M7.5 2L3.5 6l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <span class="page-info">${currentPage + 1} / ${pageInfo.totalPages}</span>
+    <button class="page-btn" onclick="loadDocuments(${currentPage + 1})" ${pageInfo.last ? 'disabled' : ''}>
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M4.5 2L8.5 6l-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>`;
 }
 
 function formatDate(iso) {
@@ -208,33 +236,6 @@ async function deleteDoc(id) {
       updateStat();
     }, 5000);
   });
-}
-
-// ─────────────────────────────────────────────
-// MODAL
-// ─────────────────────────────────────────────
-
-function openModal()  { document.getElementById('modal').classList.add('open'); }
-function closeModal() { document.getElementById('modal').classList.remove('open'); }
-
-function closeModalOutside(e) {
-  if (e.target.id === 'modal') closeModal();
-}
-
-async function addDocument() {
-  const fileInput = document.getElementById('doc-file-input');
-  const file = fileInput.files[0];
-  if (!file) return;
-
-  const doc = await apiAddDocument(file);
-  if (!doc) return;
-
-  allDocs.unshift(doc);
-  filterDocs();
-  updateStat();
-
-  fileInput.value = '';
-  closeModal();
 }
 
 // ─────────────────────────────────────────────

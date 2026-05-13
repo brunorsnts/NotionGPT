@@ -135,25 +135,25 @@ main {
   font-weight: 400;
 }
 
-.btn-add {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  padding: 0.65rem 1.25rem;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
-  letter-spacing: 0.02em;
+.sync-info {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
 }
 
-.btn-add:hover { background: var(--accent-dim); transform: translateY(-1px); }
-.btn-add:active { transform: translateY(0); }
+.sync-info strong {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.notion-badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
 
 /* ── SEARCH ── */
 .search-bar {
@@ -324,81 +324,6 @@ main {
   color: var(--text-2);
 }
 
-/* ── MODAL ── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(11, 14, 24, 0.8);
-  backdrop-filter: blur(8px);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.modal-overlay.open { opacity: 1; pointer-events: all; }
-
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border-2);
-  border-radius: 14px;
-  padding: 2rem;
-  width: 100%;
-  max-width: 460px;
-  transform: translateY(16px);
-  transition: transform 0.25s;
-}
-
-.modal-overlay.open .modal { transform: translateY(0); }
-
-.modal-title {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin-bottom: 0.4rem;
-}
-
-.modal-sub {
-  font-size: 0.78rem;
-  color: var(--text-2);
-  margin-bottom: 1.5rem;
-}
-
-.form-label {
-  display: block;
-  font-size: 0.72rem;
-  color: var(--text-2);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  margin-bottom: 0.4rem;
-}
-
-.form-input {
-  width: 100%;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.7rem 0.9rem;
-  color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 0.8rem;
-  outline: none;
-  transition: border-color 0.2s;
-  margin-bottom: 1.25rem;
-}
-
-.form-input:focus { border-color: var(--accent); }
-.form-input::placeholder { color: var(--text-3); }
-
-.modal-actions {
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-}
-
 .btn-cancel {
   padding: 0.6rem 1.1rem;
   background: transparent;
@@ -413,20 +338,38 @@ main {
 
 .btn-cancel:hover { border-color: var(--border-2); color: var(--text); }
 
-.btn-confirm {
-  padding: 0.6rem 1.25rem;
-  background: var(--accent);
-  border: none;
-  border-radius: var(--radius);
-  color: #fff;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
+/* ── PAGINATION ── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
 }
 
-.btn-confirm:hover { background: var(--accent-dim); }
+.page-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.page-info {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  letter-spacing: 0.06em;
+}
 
 /* ── FLOATING CHAT ── */
 .chat-btn {

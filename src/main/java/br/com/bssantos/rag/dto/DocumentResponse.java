@@ -8,10 +8,9 @@ import java.util.UUID;
 public record DocumentResponse (
     UUID id,
     String name,
-    String path,
     Instant addedAt
 ) {
     public DocumentResponse(StudyDocument document) {
-        this(document.getId(), document.getNome(), document.getArquivo(), document.getData());
+        this(document.getId(), document.getNome(), document.getData());
     }
 }

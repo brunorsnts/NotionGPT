@@ -27,12 +27,7 @@
         Acervo
         <em>seus resumos de estudo</em>
       </div>
-      <button class="btn-add" onclick="openModal()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-        Adicionar documento
-      </button>
+      <div class="sync-info" id="sync-info"></div>
     </div>
 
     <div class="search-bar">
@@ -46,18 +41,14 @@
     <div class="doc-grid" id="doc-grid"></div>
   </main>
 
-  <!-- MODAL -->
-  <div class="modal-overlay" id="modal" onclick="closeModalOutside(event)">
-    <div class="modal">
-      <div class="modal-title">Adicionar documento</div>
-      <div class="modal-sub">Selecione o arquivo do seu computador</div>
-
-      <label class="form-label" for="doc-file-input">Arquivo</label>
-      <input class="form-input" id="doc-file-input" type="file" accept=".md,.txt,.pdf,.docx">
-
-      <div class="modal-actions">
-        <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-        <button class="btn-confirm" onclick="addDocument()">Adicionar</button>
+  <!-- CONFIRM DIALOG -->
+  <div class="confirm-overlay" id="confirm-overlay" onclick="closeConfirmOutside(event)">
+    <div class="confirm-dialog" id="confirm-dialog">
+      <div class="confirm-title">Remover documento</div>
+      <div class="confirm-msg" id="confirm-msg"></div>
+      <div class="confirm-actions">
+        <button class="btn-cancel" onclick="closeConfirm()">Cancelar</button>
+        <button class="btn-danger" id="confirm-ok">Remover</button>
       </div>
     </div>
   </div>

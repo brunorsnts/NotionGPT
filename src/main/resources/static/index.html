@@ -106,7 +106,34 @@
       <div class="chat-header-dot"></div>
       <span class="chat-header-title">NotionGPT</span>
       <span class="chat-header-sub">online</span>
+      <div class="chat-header-actions">
+        <button class="btn-history" id="btn-history" onclick="toggleHistory()" title="Histórico de sessões">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M6 3.5V6l1.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="btn-new-chat" onclick="newConversation()" title="Nova conversa">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+            <path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <!-- HISTORY PANEL (slides in over chat-messages) -->
+    <div class="history-panel" id="history-panel">
+      <div class="history-panel-header">
+        <span class="history-panel-title">Sessões</span>
+        <button class="history-close-btn" onclick="toggleHistory()" title="Fechar">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+    </div>
+
     <div class="chat-messages" id="chat-messages">
       <div class="msg ai">Olá! Pergunte-me qualquer coisa sobre seus resumos de estudo.</div>
     </div>

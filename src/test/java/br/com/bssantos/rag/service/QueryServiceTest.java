@@ -24,6 +24,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,7 +64,7 @@ class QueryServiceTest {
                 .thenReturn(new EmbeddingSearchResult<>(List.of()));
 
         // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("o que é LangChain4J?")))
+        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("o que é LangChain4J?"), "test-session"))
                 .isInstanceOf(FalhaNoProcessamentoException.class)
                 .hasMessage("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta");
     }
@@ -75,13 +76,13 @@ class QueryServiceTest {
         when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
         when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
                 .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any())).thenReturn(new ChatResponse("resposta"));
+        when(chatService.ask(any(String.class), any(), anyString())).thenReturn(new ChatResponse("resposta"));
 
         // Act
-        ChatResponse response = queryService.askIA(new ChatRequest("minha pergunta"));
+        ChatResponse response = queryService.askIA(new ChatRequest("minha pergunta"), "test-session");
 
         // Assert
-        verify(chatService).ask("minha pergunta", matches);
+        verify(chatService).ask("minha pergunta", matches, "test-session");
         assertThat(response.reply()).isEqualTo("resposta");
     }
 
@@ -92,12 +93,12 @@ class QueryServiceTest {
         when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
         when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
                 .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any())).thenReturn(new ChatResponse("resposta"));
+        when(chatService.ask(any(String.class), any(), anyString())).thenReturn(new ChatResponse("resposta"));
         ArgumentCaptor<EmbeddingSearchRequest> searchCaptor =
                 ArgumentCaptor.forClass(EmbeddingSearchRequest.class);
 
         // Act
-        queryService.askIA(new ChatRequest("pergunta de teste"));
+        queryService.askIA(new ChatRequest("pergunta de teste"), "test-session");
 
         // Assert
         verify(embeddingStore).search(searchCaptor.capture());
@@ -113,11 +114,11 @@ class QueryServiceTest {
         when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
         when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
                 .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any()))
+        when(chatService.ask(any(String.class), any(), anyString()))
                 .thenThrow(new RuntimeException("falha de rede"));
 
         // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta")))
+        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta"), "test-session"))
                 .isInstanceOf(FalhaNoProcessamentoException.class)
                 .hasMessage("Houve um problema na comunicação com a API da LLM");
     }
@@ -130,7 +131,7 @@ class QueryServiceTest {
                 .thenThrow(new RuntimeException("conexão com banco falhou"));
 
         // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta")))
+        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta"), "test-session"))
                 .isInstanceOf(FalhaNoProcessamentoException.class)
                 .hasMessage("Estamos enfrentando problema com a conexão com o banco de dados");
     }

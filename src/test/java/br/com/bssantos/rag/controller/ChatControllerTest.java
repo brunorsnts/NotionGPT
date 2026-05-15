@@ -14,6 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -72,7 +73,7 @@ class ChatControllerTest {
     void queryComExatamente1000CaracteresRetorna200() throws Exception {
         // Arrange
         String queryNoLimite = "a".repeat(1000);
-        when(queryService.askIA(any(ChatRequest.class)))
+        when(queryService.askIA(any(ChatRequest.class), anyString()))
                 .thenReturn(new ChatResponse("resposta válida"));
         String body = objectMapper.writeValueAsString(new ChatRequest(queryNoLimite));
 
@@ -87,7 +88,7 @@ class ChatControllerTest {
     @Test
     void queryValidaRetorna200ComResposta() throws Exception {
         // Arrange
-        when(queryService.askIA(any(ChatRequest.class)))
+        when(queryService.askIA(any(ChatRequest.class), anyString()))
                 .thenReturn(new ChatResponse("resposta gerada"));
         String body = objectMapper.writeValueAsString(new ChatRequest("O que é RAG?"));
 
@@ -102,7 +103,7 @@ class ChatControllerTest {
     @Test
     void falhaNoProcessamentoRetorna500() throws Exception {
         // Arrange
-        when(queryService.askIA(any(ChatRequest.class)))
+        when(queryService.askIA(any(ChatRequest.class), anyString()))
                 .thenThrow(new FalhaNoProcessamentoException("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta"));
         String body = objectMapper.writeValueAsString(new ChatRequest("pergunta sem contexto"));
 

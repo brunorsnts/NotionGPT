@@ -37,7 +37,7 @@ public class QueryService {
         this.queryMetricsService = queryMetricsService;
     }
 
-    public ChatResponse askIA(ChatRequest request) {
+    public ChatResponse askIA(ChatRequest request, String sessionId) {
         long startNanos = System.nanoTime();
         int matchesCount = 0;
         List<Double> scores = List.of();
@@ -60,11 +60,11 @@ public class QueryService {
                 throw new FalhaNoProcessamentoException("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta");
             }
             try {
-                ChatResponse response = chatService.ask(request.query(), result);
+                ChatResponse response = chatService.ask(request.query(), result, sessionId);
                 failureStage = FailureStage.NONE;
                 return response;
             } catch (RuntimeException ex) {
-                throw new FalhaNoProcessamentoException("Houve um problema na comunicação com a API da LLM");
+                throw new FalhaNoProcessamentoException("Houve um problema na comunicação com a API da LLM", ex);
             }
 
         } finally {

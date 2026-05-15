@@ -1,5 +1,5 @@
 package br.com.bssantos.rag.observability;
 
 public enum FailureStage {
-    EMBED, SEARCH, EMPTY, LLM, NONE
+    EMBED, SEARCH, EMPTY, LLM, NONE, MEMORY
 }

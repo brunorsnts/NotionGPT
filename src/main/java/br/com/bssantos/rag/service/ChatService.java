@@ -18,20 +18,19 @@ public class ChatService {
         this.chatModel = chatModel;
     }
 
-    private String  buildPrompt(String question, List<EmbeddingMatch<TextSegment>> matches) {
-        return ("""
-                You are a helpful assistant that answers questions strictly based on the provided context.                                                                                                                \s
-                  If the answer is not found in the context, say that you don't know.                                                                                                                                       \s
-                  Do not use any external knowledge.
-                
-                  Context:
-                  """ + matches.stream()
+    private String buildPrompt(String question, List<EmbeddingMatch<TextSegment>> matches) {
+        String context = matches.stream()
                 .map(m -> m.embedded().text())
-                .collect(Collectors.joining("\n\n"))
-                + """
-                
-                  Question:
-                  """ + question);
+                .collect(Collectors.joining("\n\n"));
+        return """
+                Você é um assistente que responde perguntas exclusivamente com base no contexto fornecido abaixo.
+                Se a resposta não estiver no contexto, diga que não sabe. Não use conhecimento externo.
+
+                Contexto:
+                    %s
+
+                Pergunta:
+                    <pergunta> %s </pergunta>""".formatted(context, question);
     }
 
     public ChatResponse ask(String question, List<EmbeddingMatch<TextSegment>> matches) {

@@ -3,6 +3,7 @@ package br.com.bssantos.rag.service;
 import br.com.bssantos.rag.dto.ChatRequest;
 import br.com.bssantos.rag.dto.ChatResponse;
 import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
+import br.com.bssantos.rag.observability.QueryMetricsService;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -38,13 +39,16 @@ class QueryServiceTest {
     @Mock
     private EmbeddingStore<TextSegment> embeddingStore;
 
+    @Mock
+    private QueryMetricsService queryMetricsService;
+
     private QueryService queryService;
 
     private static final Embedding DUMMY_EMBEDDING = Embedding.from(new float[]{0.1f, 0.2f, 0.3f});
 
     @BeforeEach
     void setUp() {
-        queryService = new QueryService(embeddingModel, chatService, embeddingStore);
+        queryService = new QueryService(embeddingModel, chatService, embeddingStore, queryMetricsService);
     }
 
     private EmbeddingMatch<TextSegment> buildMatch(String text) {

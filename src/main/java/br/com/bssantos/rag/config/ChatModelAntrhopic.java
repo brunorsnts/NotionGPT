@@ -19,7 +19,6 @@ public class ChatModelAntrhopic {
                 .modelName("claude-haiku-4-5-20251001")
                 .maxTokens(512)
                 .cacheSystemMessages(true)
-                .cacheTools(true)
                 .topK(30)
                 .logRequests(true)
                 .logResponses(true)

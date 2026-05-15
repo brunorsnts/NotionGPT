@@ -109,7 +109,7 @@ async function apiDeleteDocument(id) {
 async function apiQuery(query) {
   const res = await fetch('/query', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
     body: JSON.stringify({ query })
   });
   const data = await res.json();
@@ -254,24 +254,6 @@ function handleKey(e) {
     e.preventDefault();
     sendMessage();
   }
-}
-
-async function sendMessage() {
-  const input = document.getElementById('chat-input');
-  const query = input.value.trim();
-  if (!query) return;
-
-  input.value = '';
-  appendMsg(query, 'user');
-
-  const loading = appendLoading();
-  document.getElementById('btn-send').disabled = true;
-
-  const data = await apiQuery(query);
-
-  loading.remove();
-  if (data) appendMsg(data.reply, 'ai');
-  document.getElementById('btn-send').disabled = false;
 }
 
 function appendMsg(text, type) {
@@ -479,6 +461,229 @@ function toggleStats() {
 
 function closeStatsOutside(e) {
   if (e.target.id === 'stats-overlay') toggleStats();
+}
+
+// ─────────────────────────────────────────────
+// SESSÃO MULTI-TURN + HISTÓRICO
+// ─────────────────────────────────────────────
+
+const SESSIONS_KEY   = 'notion-sessions';
+const SESSION_ID_KEY = 'notion-session-id';
+const MAX_SESSIONS   = 10;
+const WELCOME_MSG    = 'Olá! Pergunte-me qualquer coisa sobre seus resumos de estudo.';
+
+// ── Persistência de sessões ──────────────────
+
+function loadSessions() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveSessions(sessions) {
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+}
+
+function getSession(id) {
+  return loadSessions().find(s => s.id === id) || null;
+}
+
+function upsertSession(session) {
+  let sessions = loadSessions();
+  const idx = sessions.findIndex(s => s.id === session.id);
+  if (idx >= 0) {
+    sessions[idx] = session;
+  } else {
+    sessions.unshift(session);
+    if (sessions.length > MAX_SESSIONS) {
+      sessions = sessions.slice(0, MAX_SESSIONS);
+    }
+  }
+  saveSessions(sessions);
+}
+
+function removeSessionIfEmpty(id) {
+  // Only keep sessions that have at least one user message
+  let sessions = loadSessions();
+  const session = sessions.find(s => s.id === id);
+  if (!session) return;
+  const hasUserMsg = session.messages.some(m => m.type === 'user');
+  if (!hasUserMsg) {
+    sessions = sessions.filter(s => s.id !== id);
+    saveSessions(sessions);
+  }
+}
+
+// ── Estado da sessão ─────────────────────────
+
+let sessionId = localStorage.getItem(SESSION_ID_KEY)
+    ?? (() => {
+        const id = crypto.randomUUID();
+        localStorage.setItem(SESSION_ID_KEY, id);
+        return id;
+    })();
+
+// Ensure the current session exists in history (handles page reload)
+(function initCurrentSession() {
+  if (!getSession(sessionId)) {
+    upsertSession({ id: sessionId, title: null, createdAt: new Date().toISOString(), messages: [] });
+  }
+})();
+
+// ── Salvar mensagens na sessão ───────────────
+
+function addMessageToSession(type, text) {
+  const sessions = loadSessions();
+  const session = sessions.find(s => s.id === sessionId);
+  if (!session) return;
+
+  session.messages.push({ type, text });
+
+  // Derive title from first user message
+  if (!session.title && type === 'user') {
+    session.title = text.length > 40 ? text.slice(0, 40).trimEnd() + '…' : text;
+  }
+
+  saveSessions(sessions);
+}
+
+// ── Chat: envio de mensagem com persistência ─
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const query = input.value.trim();
+  if (!query) return;
+
+  input.value = '';
+  appendMsg(query, 'user');
+  addMessageToSession('user', query);
+
+  const loading = appendLoading();
+  document.getElementById('btn-send').disabled = true;
+
+  const data = await apiQuery(query);
+
+  loading.remove();
+  if (data) {
+    appendMsg(data.reply, 'ai');
+    addMessageToSession('ai', data.reply);
+  }
+  document.getElementById('btn-send').disabled = false;
+}
+
+// ── Nova conversa ────────────────────────────
+
+function newConversation() {
+  // Persist current session to history (remove if it has no messages)
+  removeSessionIfEmpty(sessionId);
+
+  // Create a fresh session
+  const id = crypto.randomUUID();
+  localStorage.setItem(SESSION_ID_KEY, id);
+  sessionId = id;
+  upsertSession({ id, title: null, createdAt: new Date().toISOString(), messages: [] });
+
+  const box = document.getElementById('chat-messages');
+  box.innerHTML = `<div class="msg ai">${WELCOME_MSG}</div>`;
+
+  // Refresh history list if open
+  if (historyOpen) renderHistoryList();
+}
+
+// ── Painel de histórico ──────────────────────
+
+let historyOpen = false;
+
+function toggleHistory() {
+  historyOpen = !historyOpen;
+  const panel = document.getElementById('history-panel');
+  const btn   = document.getElementById('btn-history');
+  panel.classList.toggle('open', historyOpen);
+  btn.classList.toggle('active', historyOpen);
+  if (historyOpen) renderHistoryList();
+}
+
+function renderHistoryList() {
+  const list = document.getElementById('history-list');
+  const sessions = loadSessions().filter(s => s.messages.some(m => m.type === 'user'));
+
+  if (!sessions.length) {
+    list.innerHTML = `
+      <div class="history-empty">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="16" r="12" stroke="#3d4d6b" stroke-width="1.5"/>
+          <path d="M16 9v7l4 4" stroke="#3d4d6b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="history-empty-text">sem sessões salvas</span>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = sessions.map((s, i) => {
+    const isActive = s.id === sessionId;
+    const msgCount = s.messages.filter(m => m.type === 'user').length;
+    const date     = formatHistoryDate(s.createdAt);
+    const title    = s.title || 'Sessão sem título';
+    return `
+      <div class="history-item${isActive ? ' active' : ''}"
+           style="animation-delay:${i * 0.04}s"
+           onclick="loadHistorySession('${s.id}')">
+        <div class="history-item-title">${escapeHtml(title)}</div>
+        <div class="history-item-meta">
+          <span class="history-item-date">${date}</span>
+          <span class="history-item-count">· ${msgCount} pergunta${msgCount !== 1 ? 's' : ''}</span>
+          ${isActive ? '<span class="history-item-active-badge">ativa</span>' : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function loadHistorySession(id) {
+  if (id === sessionId) {
+    toggleHistory();
+    return;
+  }
+
+  // Persist current session before switching
+  removeSessionIfEmpty(sessionId);
+
+  sessionId = id;
+  localStorage.setItem(SESSION_ID_KEY, id);
+
+  const session = getSession(id);
+  const box = document.getElementById('chat-messages');
+  box.innerHTML = `<div class="msg ai">${WELCOME_MSG}</div>`;
+
+  if (session && session.messages.length) {
+    session.messages.forEach(m => appendMsg(m.text, m.type));
+  }
+
+  toggleHistory();
+}
+
+function formatHistoryDate(iso) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffH   = Math.floor(diffMs / 3600000);
+  const diffD   = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1)  return 'agora';
+  if (diffMin < 60) return `${diffMin}min atrás`;
+  if (diffH < 24)   return `${diffH}h atrás`;
+  if (diffD < 7)    return `${diffD}d atrás`;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ─────────────────────────────────────────────

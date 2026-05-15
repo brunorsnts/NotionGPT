@@ -30,11 +30,15 @@ public class QueryService {
 
     public ChatResponse askIA(ChatRequest request) {
         List<EmbeddingMatch<TextSegment>> result = result(searchRequest(embed(request)));
+        if (result.isEmpty()) {
+            throw new FalhaNoProcessamentoException("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta");
+        }
         try {
             return chatService.ask(request.query(), result);
         } catch (RuntimeException ex) {
             throw new FalhaNoProcessamentoException("Houve um problema na comunicação com a API da LLM");
         }
+
     }
 
     private List<EmbeddingMatch<TextSegment>> result(EmbeddingSearchRequest searchRequest) {
@@ -49,7 +53,8 @@ public class QueryService {
     private EmbeddingSearchRequest searchRequest(Embedding embedding) {
         return EmbeddingSearchRequest.builder()
                 .queryEmbedding(embedding)
-                .maxResults(4)
+                .maxResults(6)
+                .minScore(0.5)
                 .build();
     }
 

@@ -1,4 +1,7 @@
 package br.com.bssantos.rag.dto;
 
-public record ChatRequest(String query) {
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record ChatRequest(@NotBlank @Size(max = 1000) String query) {
 }

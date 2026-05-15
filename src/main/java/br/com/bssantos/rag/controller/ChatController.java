@@ -3,6 +3,7 @@ package br.com.bssantos.rag.controller;
 import br.com.bssantos.rag.dto.ChatRequest;
 import br.com.bssantos.rag.dto.ChatResponse;
 import br.com.bssantos.rag.service.QueryService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,7 +19,7 @@ public class ChatController {
     }
 
     @PostMapping("/query")
-    public ResponseEntity<ChatResponse> realizaConsulta(@RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> realizaConsulta(@RequestBody @Valid ChatRequest request) {
         ChatResponse response = queryService.askIA(request);
         return ResponseEntity.ok(response);
     }

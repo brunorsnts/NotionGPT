@@ -339,6 +339,149 @@ function initChatResize() {
 }
 
 // ─────────────────────────────────────────────
+// STATS
+// ─────────────────────────────────────────────
+
+let statsOpen = false;
+
+async function apiGetStats() {
+  const res = await fetch('/stats');
+  const data = await res.json();
+  if (!res.ok) { showError(data.detail || 'Erro ao carregar métricas.'); return null; }
+  return data;
+}
+
+async function loadStats() {
+  document.getElementById('stats-body').innerHTML =
+    '<div class="stats-loading">Carregando métricas...</div>';
+  const data = await apiGetStats();
+  if (data) renderStats(data);
+}
+
+function animateCount(el, target, decimals, suffix) {
+  const duration = 600;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const val = target * ease;
+    el.textContent = decimals === 0 ? Math.round(val) + suffix : val.toFixed(decimals) + suffix;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function renderStats(s) {
+  const total = s.totalQueries;
+  const dash = '--';
+
+  const successRateNum = total === 0 ? null : s.successCount / total * 100;
+  const avgLatencyNum  = total === 0 ? null : Math.round(s.avgLatencyMs);
+  const p95LatencyNum  = total === 0 ? null : Math.round(s.p95LatencyMs);
+  const avgScoreNum    = total === 0 ? null : s.avgScore * 100;
+  const avgMatchesNum  = total === 0 ? null : s.avgMatchesCount;
+
+  const bufferPct = s.historyCapacity > 0
+    ? Math.round(s.historySize / s.historyCapacity * 100)
+    : 0;
+
+  const topPages = (s.topPages || []).slice(0, 5);
+  const maxCount = topPages.length > 0 ? topPages[0].count : 1;
+
+  document.getElementById('stats-body').innerHTML = `
+    <div>
+      <div class="stats-section-label">Consultas</div>
+      <div class="stats-grid">
+        <div class="stats-metric-card">
+          <div class="stats-metric-label">Total de consultas</div>
+          <div class="stats-metric-value accent" data-count="${total}" data-dec="0" data-suffix="">${total === 0 ? dash : '0'}</div>
+        </div>
+        <div class="stats-metric-card">
+          <div class="stats-metric-label">Taxa de sucesso</div>
+          <div class="stats-metric-value${successRateNum !== null ? ' accent' : ''}"
+               data-count="${successRateNum ?? ''}" data-dec="1" data-suffix="%">${successRateNum !== null ? '0%' : dash}</div>
+        </div>
+        <div class="stats-metric-card">
+          <div class="stats-metric-label">Latência média</div>
+          <div class="stats-metric-value" data-count="${avgLatencyNum ?? ''}" data-dec="0" data-suffix=" ms">${avgLatencyNum !== null ? '0 ms' : dash}</div>
+        </div>
+        <div class="stats-metric-card">
+          <div class="stats-metric-label">Latência p95</div>
+          <div class="stats-metric-value${p95LatencyNum !== null ? ' danger' : ''}"
+               data-count="${p95LatencyNum ?? ''}" data-dec="0" data-suffix=" ms">${p95LatencyNum !== null ? '0 ms' : dash}</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="stats-section-label">Qualidade da recuperação</div>
+      <div class="stats-wide-card">
+        <div class="stats-wide-item">
+          <div class="stats-metric-label">Score médio</div>
+          <div class="stats-metric-value amber" data-count="${avgScoreNum ?? ''}" data-dec="1" data-suffix="%">${avgScoreNum !== null ? '0%' : dash}</div>
+        </div>
+        <div class="stats-wide-sep"></div>
+        <div class="stats-wide-item">
+          <div class="stats-metric-label">Matches médios</div>
+          <div class="stats-metric-value" data-count="${avgMatchesNum ?? ''}" data-dec="1" data-suffix="">${avgMatchesNum !== null ? '0' : dash}</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="stats-section-label">Páginas mais consultadas</div>
+      <div class="stats-top-pages">
+        ${topPages.length === 0
+          ? '<div class="stats-loading">Sem dados ainda.</div>'
+          : topPages.map((p, i) => `
+            <div class="stats-page-row">
+              <div class="stats-page-heat" style="width:${Math.round(p.count / maxCount * 100)}%"></div>
+              <span class="stats-page-rank">${i + 1}</span>
+              <span class="stats-page-name" title="${p.titulo}">${p.titulo}</span>
+              <span class="stats-page-count">${p.count}×</span>
+            </div>`).join('')}
+      </div>
+    </div>
+
+    <div>
+      <div class="stats-section-label">Buffer de histórico</div>
+      <div class="stats-buffer-card">
+        <div class="stats-buffer-info">
+          <span class="stats-buffer-label">Capacidade utilizada</span>
+          <span class="stats-buffer-val">${s.historySize} / ${s.historyCapacity}</span>
+        </div>
+        <div class="stats-progress-track">
+          <div class="stats-progress-fill" style="width:0%" data-target="${bufferPct}"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.querySelectorAll('#stats-body [data-count]').forEach(el => {
+    const target = parseFloat(el.dataset.count);
+    if (isNaN(target)) return;
+    const dec = parseInt(el.dataset.dec ?? '0');
+    const suffix = el.dataset.suffix ?? '';
+    animateCount(el, target, dec, suffix);
+  });
+
+  const fill = document.querySelector('.stats-progress-fill[data-target]');
+  if (fill) requestAnimationFrame(() => { fill.style.width = fill.dataset.target + '%'; });
+}
+
+function toggleStats() {
+  statsOpen = !statsOpen;
+  const overlay = document.getElementById('stats-overlay');
+  const btn = document.querySelector('.stats-btn');
+  overlay.classList.toggle('open', statsOpen);
+  btn.classList.toggle('active', statsOpen);
+  if (statsOpen) loadStats();
+}
+
+function closeStatsOutside(e) {
+  if (e.target.id === 'stats-overlay') toggleStats();
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 loadDocuments();

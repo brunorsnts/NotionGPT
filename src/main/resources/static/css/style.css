@@ -779,3 +779,364 @@ main {
   from { width: 100%; }
   to   { width: 0%; }
 }
+
+/* ── STATS BUTTON ── */
+.stats-btn {
+  width: 34px;
+  height: 34px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.stats-btn:hover,
+.stats-btn.active {
+  background: var(--card);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── STATS OVERLAY + DRAWER ── */
+.stats-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.stats-overlay.open {
+  pointer-events: all;
+}
+
+.stats-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 380px;
+  max-width: 100vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border-2);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: -16px 0 48px rgba(0, 0, 0, 0.45);
+}
+
+.stats-overlay.open .stats-drawer {
+  transform: translateX(0);
+}
+
+.stats-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.stats-drawer-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.stats-close-btn {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.stats-close-btn:hover {
+  background: var(--card);
+  border-color: var(--border-2);
+  color: var(--text);
+}
+
+.stats-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.stats-loading {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-3);
+  text-align: center;
+  padding: 3rem 0;
+  letter-spacing: 0.06em;
+}
+
+.stats-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.stats-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  width: 100%;
+  justify-content: center;
+}
+
+.stats-refresh-btn:hover {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── STATS LIVE DOT ── */
+.stats-drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.stats-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: statsLivePulse 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes statsLivePulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 4px  var(--accent); }
+  50%       { opacity: 0.5; box-shadow: 0 0 12px var(--accent); }
+}
+
+/* ── STATS SECTIONS ── */
+.stats-section-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.6rem;
+}
+
+/* ── METRICS GRID 2x2 ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.stats-metric-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  animation: statsCardIn 0.35s ease both;
+}
+
+.stats-metric-card:nth-child(1) { animation-delay: 0.05s; }
+.stats-metric-card:nth-child(2) { animation-delay: 0.10s; }
+.stats-metric-card:nth-child(3) { animation-delay: 0.15s; }
+.stats-metric-card:nth-child(4) { animation-delay: 0.20s; }
+
+@keyframes statsCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stats-metric-label {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.68rem;
+  color: var(--text-2);
+  font-weight: 300;
+}
+
+.stats-metric-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.35rem;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.stats-metric-value.accent { color: var(--accent); text-shadow: 0 0 18px rgba(77,124,254,0.35); }
+.stats-metric-value.amber  { color: var(--amber);  text-shadow: 0 0 18px rgba(232,184,109,0.3); }
+.stats-metric-value.danger { color: var(--danger);  text-shadow: 0 0 18px rgba(224,92,106,0.3); }
+
+/* ── SCORE + MATCHES CARD ── */
+.stats-wide-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-wide-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stats-wide-sep {
+  width: 1px;
+  height: 36px;
+  background: var(--border);
+}
+
+/* ── TOP PAGES LIST ── */
+.stats-top-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.stats-page-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+  overflow: hidden;
+  animation: statsCardIn 0.3s ease both;
+}
+
+.stats-page-row:nth-child(1) { animation-delay: 0.05s; }
+.stats-page-row:nth-child(2) { animation-delay: 0.10s; }
+.stats-page-row:nth-child(3) { animation-delay: 0.15s; }
+.stats-page-row:nth-child(4) { animation-delay: 0.20s; }
+.stats-page-row:nth-child(5) { animation-delay: 0.25s; }
+
+.stats-page-heat {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(77,124,254,0.07) 0%, transparent 100%);
+  transform-origin: left;
+  pointer-events: none;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stats-page-row:hover {
+  background: var(--card-hover);
+  border-color: var(--border-2);
+}
+
+.stats-page-rank {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text-3);
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.stats-page-name {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.8rem;
+  color: var(--text);
+  font-weight: 300;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.stats-page-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--accent);
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* ── BUFFER CAPACITY ── */
+.stats-buffer-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.stats-buffer-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stats-buffer-label {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.68rem;
+  color: var(--text-2);
+  font-weight: 300;
+}
+
+.stats-buffer-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.stats-progress-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.stats-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 2px;
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 6px rgba(77,124,254,0.4);
+}

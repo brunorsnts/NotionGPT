@@ -42,7 +42,7 @@ function showError(message) {
     </svg>
     <div class="toast-body">
       <div class="toast-title">Erro</div>
-      <div class="toast-msg">${message}</div>
+      <div class="toast-msg">${escapeHtml(message)}</div>
     </div>
     <button class="toast-close" onclick="removeToast(this.closest('.toast'))">
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -115,6 +115,66 @@ async function apiQuery(query) {
   const data = await res.json();
   if (!res.ok) { showError(data.detail || 'Erro ao processar consulta.'); return null; }
   return data;
+}
+
+async function apiQueryStream(query, { onToken, onDone, onError }) {
+  let res;
+  try {
+    res = await fetch('/query/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Session-Id': sessionId },
+      body: JSON.stringify({ query })
+    });
+  } catch (e) {
+    onError('Erro de conexão. Tente novamente.');
+    return;
+  }
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    onError(err.detail || 'Erro ao processar consulta.');
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let currentEvent = null;
+  let dataBuffer = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+          dataBuffer = null;
+        } else if (line.startsWith('data:')) {
+          const chunk = line.slice(5);
+          dataBuffer = dataBuffer === null ? chunk : dataBuffer + '\n' + chunk;
+        } else if (line === '') {
+          if (currentEvent !== null) {
+            const data = dataBuffer ?? '';
+            if (currentEvent === 'token') onToken(JSON.parse(data));
+            else if (currentEvent === 'done') onDone();
+            else if (currentEvent === 'error') onError(data);
+          }
+          currentEvent = null;
+          dataBuffer = null;
+        } else if (dataBuffer !== null) {
+          dataBuffer += '\n' + line;
+        }
+      }
+    }
+  } catch (e) {
+    onError('Conexão interrompida.');
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -261,7 +321,7 @@ function appendMsg(text, type) {
   const div = document.createElement('div');
   div.className = `msg ${type}`;
   if (type === 'ai') {
-    div.innerHTML = marked.parse(text);
+    div.innerHTML = DOMPurify.sanitize(marked.parse(text));
   } else {
     div.textContent = text;
   }
@@ -561,16 +621,41 @@ async function sendMessage() {
   addMessageToSession('user', query);
 
   const loading = appendLoading();
+  const box = document.getElementById('chat-messages');
   document.getElementById('btn-send').disabled = true;
 
-  const data = await apiQuery(query);
+  let accumulated = '';
+  let aiDiv = null;
 
-  loading.remove();
-  if (data) {
-    appendMsg(data.reply, 'ai');
-    addMessageToSession('ai', data.reply);
+  try {
+    await new Promise((resolve) => {
+      apiQueryStream(query, {
+        onToken(token) {
+          accumulated += token;
+          if (!aiDiv) {
+            loading.remove();
+            aiDiv = appendMsg('', 'ai');
+          }
+          aiDiv.textContent = accumulated;
+          box.scrollTop = box.scrollHeight;
+        },
+        onDone() {
+          if (aiDiv && accumulated) {
+            aiDiv.innerHTML = DOMPurify.sanitize(marked.parse(accumulated));
+          }
+          if (accumulated) addMessageToSession('ai', accumulated);
+          resolve();
+        },
+        onError(msg) {
+          showError(msg);
+          resolve();
+        }
+      });
+    });
+  } finally {
+    loading.remove();
+    document.getElementById('btn-send').disabled = false;
   }
-  document.getElementById('btn-send').disabled = false;
 }
 
 // ── Nova conversa ────────────────────────────

@@ -5,6 +5,7 @@ import br.com.bssantos.rag.dto.ChatResponse;
 import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
 import br.com.bssantos.rag.handler.GlobalExceptionHandler;
 import br.com.bssantos.rag.service.QueryService;
+import br.com.bssantos.rag.service.QueryStreamService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +32,9 @@ class ChatControllerTest {
 
     @MockitoBean
     private QueryService queryService;
+
+    @MockitoBean
+    private QueryStreamService queryStreamService;
 
     @Test
     void queryEmBrancoRetorna400() throws Exception {

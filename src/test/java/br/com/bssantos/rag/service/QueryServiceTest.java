@@ -2,16 +2,11 @@ package br.com.bssantos.rag.service;
 
 import br.com.bssantos.rag.dto.ChatRequest;
 import br.com.bssantos.rag.dto.ChatResponse;
+import br.com.bssantos.rag.dto.RetrievalResult;
 import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
+import br.com.bssantos.rag.observability.FailureStage;
+import br.com.bssantos.rag.observability.QueryMetric;
 import br.com.bssantos.rag.observability.QueryMetricsService;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,107 +27,192 @@ import static org.mockito.Mockito.when;
 class QueryServiceTest {
 
     @Mock
-    private EmbeddingModel embeddingModel;
+    private ContextRetrievalService contextRetrievalService;
 
     @Mock
     private ChatService chatService;
-
-    @Mock
-    private EmbeddingStore<TextSegment> embeddingStore;
 
     @Mock
     private QueryMetricsService queryMetricsService;
 
     private QueryService queryService;
 
-    private static final Embedding DUMMY_EMBEDDING = Embedding.from(new float[]{0.1f, 0.2f, 0.3f});
+    private static final ChatRequest REQUEST = new ChatRequest("o que é LangChain4J?");
+    private static final String SESSION_ID = "session-abc";
+
+    private static final RetrievalResult RETRIEVAL_RESULT = new RetrievalResult(
+            "contexto relevante",
+            2,
+            List.of(0.9, 0.8),
+            List.of("Aula 1", "Aula 2")
+    );
 
     @BeforeEach
     void setUp() {
-        queryService = new QueryService(embeddingModel, chatService, embeddingStore, queryMetricsService);
-    }
-
-    private EmbeddingMatch<TextSegment> buildMatch(String text) {
-        return new EmbeddingMatch<>(0.8, "id-1", DUMMY_EMBEDDING, TextSegment.from(text));
+        queryService = new QueryService(contextRetrievalService, chatService, queryMetricsService);
     }
 
     @Test
-    void lancaFalhaNoProcessamentoQuandoResultadoEhVazio() {
+    void retornaRespostaQuandoPipelineCompletoComSucesso() {
         // Arrange
-        when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
-        when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
-                .thenReturn(new EmbeddingSearchResult<>(List.of()));
+        when(contextRetrievalService.buildContext(REQUEST)).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(REQUEST.query(), RETRIEVAL_RESULT.context(), SESSION_ID))
+                .thenReturn(new ChatResponse("resposta gerada"));
+
+        // Act
+        ChatResponse response = queryService.askIA(REQUEST, SESSION_ID);
+
+        // Assert
+        assertThat(response.reply()).isEqualTo("resposta gerada");
+    }
+
+    @Test
+    void delegaBuildContextComORequestOriginal() {
+        // Arrange
+        when(contextRetrievalService.buildContext(REQUEST)).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(anyString(), anyString(), anyString()))
+                .thenReturn(new ChatResponse("qualquer"));
+
+        // Act
+        queryService.askIA(REQUEST, SESSION_ID);
+
+        // Assert
+        verify(contextRetrievalService).buildContext(REQUEST);
+    }
+
+    @Test
+    void delegaParaChatServiceComContextoESessionIdCorretos() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any())).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(REQUEST.query(), RETRIEVAL_RESULT.context(), SESSION_ID))
+                .thenReturn(new ChatResponse("resposta"));
+
+        // Act
+        queryService.askIA(REQUEST, SESSION_ID);
+
+        // Assert
+        verify(chatService).ask(REQUEST.query(), RETRIEVAL_RESULT.context(), SESSION_ID);
+    }
+
+    @Test
+    void gravaMetricaComFailureStageNoneAposSucesso() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any())).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(anyString(), anyString(), anyString()))
+                .thenReturn(new ChatResponse("ok"));
+        ArgumentCaptor<QueryMetric> captor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        queryService.askIA(REQUEST, SESSION_ID);
+
+        // Assert
+        verify(queryMetricsService).record(captor.capture());
+        QueryMetric metric = captor.getValue();
+        assertThat(metric.failureStage()).isEqualTo(FailureStage.NONE);
+        assertThat(metric.matchesCount()).isEqualTo(2);
+        assertThat(metric.scores()).containsExactly(0.9, 0.8);
+        assertThat(metric.titulos()).containsExactly("Aula 1", "Aula 2");
+        assertThat(metric.latencyMs()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void gravaMetricaComDadosDoRetrievalQuandoChatServiceFalha() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any())).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("timeout"));
+        ArgumentCaptor<QueryMetric> captor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
+                .isInstanceOf(FalhaNoProcessamentoException.class);
+
+        // Assert — retrievalResult != null, metrica deve ter os dados reais do retrieval
+        verify(queryMetricsService).record(captor.capture());
+        QueryMetric metric = captor.getValue();
+        assertThat(metric.failureStage()).isEqualTo(FailureStage.LLM);
+        assertThat(metric.matchesCount()).isEqualTo(2);
+        assertThat(metric.scores()).containsExactly(0.9, 0.8);
+    }
+
+    @Test
+    void gravaMetricaComZerosQuandoBuildContextFalha() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any()))
+                .thenThrow(new FalhaNoProcessamentoException("sem resultados", FailureStage.EMPTY));
+        ArgumentCaptor<QueryMetric> captor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
+                .isInstanceOf(FalhaNoProcessamentoException.class);
+
+        // Assert — retrievalResult == null, metrica deve ter zeros
+        verify(queryMetricsService).record(captor.capture());
+        QueryMetric metric = captor.getValue();
+        assertThat(metric.failureStage()).isEqualTo(FailureStage.EMPTY);
+        assertThat(metric.matchesCount()).isZero();
+        assertThat(metric.scores()).isEmpty();
+        assertThat(metric.titulos()).isEmpty();
+    }
+
+    @Test
+    void propagaFailureStageDaExcecaoQuandoBuildContextLancaFalhaNoProcessamento() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any()))
+                .thenThrow(new FalhaNoProcessamentoException("sem embedding", FailureStage.EMBED));
 
         // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("o que é LangChain4J?"), "test-session"))
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
                 .isInstanceOf(FalhaNoProcessamentoException.class)
-                .hasMessage("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta");
+                .hasMessage("sem embedding")
+                .extracting(e -> ((FalhaNoProcessamentoException) e).getFailureStage())
+                .isEqualTo(FailureStage.EMBED);
     }
 
     @Test
-    void delegaParaChatServiceQuandoHaResultados() {
+    void propagaFailureStageEmptyQuandoBuildContextNaoEncontraResultados() {
         // Arrange
-        List<EmbeddingMatch<TextSegment>> matches = List.of(buildMatch("conteudo relevante"));
-        when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
-        when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
-                .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any(), anyString())).thenReturn(new ChatResponse("resposta"));
+        when(contextRetrievalService.buildContext(any()))
+                .thenThrow(new FalhaNoProcessamentoException(
+                        "Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta",
+                        FailureStage.EMPTY));
 
-        // Act
-        ChatResponse response = queryService.askIA(new ChatRequest("minha pergunta"), "test-session");
-
-        // Assert
-        verify(chatService).ask("minha pergunta", matches, "test-session");
-        assertThat(response.reply()).isEqualTo("resposta");
+        // Act & Assert
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
+                .isInstanceOf(FalhaNoProcessamentoException.class)
+                .extracting(e -> ((FalhaNoProcessamentoException) e).getFailureStage())
+                .isEqualTo(FailureStage.EMPTY);
     }
 
     @Test
-    void searchRequestUsaMaxResultsSeisMinimoScoreMeioPonto() {
+    void wrapsRuntimeExceptionDoChatServiceEmFalhaNoProcessamentoComStageLLM() {
         // Arrange
-        List<EmbeddingMatch<TextSegment>> matches = List.of(buildMatch("algum texto"));
-        when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
-        when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
-                .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any(), anyString())).thenReturn(new ChatResponse("resposta"));
-        ArgumentCaptor<EmbeddingSearchRequest> searchCaptor =
-                ArgumentCaptor.forClass(EmbeddingSearchRequest.class);
+        when(contextRetrievalService.buildContext(any())).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("conexão recusada"));
 
-        // Act
-        queryService.askIA(new ChatRequest("pergunta de teste"), "test-session");
-
-        // Assert
-        verify(embeddingStore).search(searchCaptor.capture());
-        EmbeddingSearchRequest captured = searchCaptor.getValue();
-        assertThat(captured.maxResults()).isEqualTo(6);
-        assertThat(captured.minScore()).isEqualTo(0.5);
+        // Act & Assert
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
+                .isInstanceOf(FalhaNoProcessamentoException.class)
+                .hasMessage("Falha ao tentar conexão com LLM")
+                .extracting(e -> ((FalhaNoProcessamentoException) e).getFailureStage())
+                .isEqualTo(FailureStage.LLM);
     }
 
     @Test
-    void lancaFalhaNoProcessamentoQuandoChatServiceLancaRuntimeException() {
+    void gravaMetricaComFailureStageLlmQuandoChatServiceLancaRuntimeException() {
         // Arrange
-        List<EmbeddingMatch<TextSegment>> matches = List.of(buildMatch("contexto"));
-        when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
-        when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
-                .thenReturn(new EmbeddingSearchResult<>(matches));
-        when(chatService.ask(any(String.class), any(), anyString()))
+        when(contextRetrievalService.buildContext(any())).thenReturn(RETRIEVAL_RESULT);
+        when(chatService.ask(anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("falha de rede"));
+        ArgumentCaptor<QueryMetric> captor = ArgumentCaptor.forClass(QueryMetric.class);
 
-        // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta"), "test-session"))
-                .isInstanceOf(FalhaNoProcessamentoException.class)
-                .hasMessage("Houve um problema na comunicação com a API da LLM");
-    }
+        // Act
+        assertThatThrownBy(() -> queryService.askIA(REQUEST, SESSION_ID))
+                .isInstanceOf(FalhaNoProcessamentoException.class);
 
-    @Test
-    void lancaFalhaNoProcessamentoQuandoEmbeddingStoreLancaRuntimeException() {
-        // Arrange
-        when(embeddingModel.embed(any(String.class))).thenReturn(Response.from(DUMMY_EMBEDDING));
-        when(embeddingStore.search(any(EmbeddingSearchRequest.class)))
-                .thenThrow(new RuntimeException("conexão com banco falhou"));
-
-        // Act & Assert
-        assertThatThrownBy(() -> queryService.askIA(new ChatRequest("pergunta"), "test-session"))
-                .isInstanceOf(FalhaNoProcessamentoException.class)
-                .hasMessage("Estamos enfrentando problema com a conexão com o banco de dados");
+        // Assert
+        verify(queryMetricsService).record(captor.capture());
+        assertThat(captor.getValue().failureStage()).isEqualTo(FailureStage.LLM);
     }
 }

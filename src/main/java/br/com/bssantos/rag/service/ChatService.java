@@ -1,12 +1,7 @@
 package br.com.bssantos.rag.service;
 
 import br.com.bssantos.rag.dto.ChatResponse;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
@@ -17,14 +12,7 @@ public class ChatService {
         this.chatAssistant = chatAssistant;
     }
 
-    private String buildContext(List<EmbeddingMatch<TextSegment>> matches) {
-        return matches.stream()
-                .map(m -> m.embedded().text())
-                .collect(Collectors.joining("\n\n"));
-    }
-
-    public ChatResponse ask(String question, List<EmbeddingMatch<TextSegment>> matches, String sessionId) {
-        String context = buildContext(matches);
+    public ChatResponse ask(String question, String context, String sessionId) {
         return new ChatResponse(chatAssistant.chat(sessionId, context, question));
     }
 }

@@ -1,7 +1,9 @@
 package br.com.bssantos.rag.config;
 
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
+import dev.langchain4j.model.anthropic.AnthropicStreamingChatModel;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.StreamingChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +17,19 @@ public class ChatModelAntrhopic {
     @Bean
     public ChatModel chatModel() {
         return AnthropicChatModel.builder()
+                .apiKey(apiKey)
+                .modelName("claude-haiku-4-5-20251001")
+                .maxTokens(512)
+                .cacheSystemMessages(true)
+                .topK(30)
+                .logRequests(true)
+                .logResponses(true)
+                .build();
+    }
+
+    @Bean
+    public StreamingChatModel streamingChatModel() {
+        return AnthropicStreamingChatModel.builder()
                 .apiKey(apiKey)
                 .modelName("claude-haiku-4-5-20251001")
                 .maxTokens(512)

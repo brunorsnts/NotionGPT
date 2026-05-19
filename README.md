@@ -7,7 +7,7 @@ Chatbot RAG (Retrieval-Augmented Generation) que responde perguntas baseando-se 
 - Java 21 + Spring Boot 3.5
 - [LangChain4J](https://github.com/langchain4j/langchain4j) 1.13.1
 - Anthropic Claude (`claude-haiku-4-5`) como modelo de chat
-- Cohere `embed-multilingual-light-v3.0` como modelo de embeddings
+- Cohere `contextRetrievalService-multilingual-light-v3.0` como modelo de embeddings
 - PostgreSQL + pgvector como banco vetorial (`PgVectorEmbeddingStore`)
 - Docker para o banco de dados
 

@@ -2,18 +2,11 @@ package br.com.bssantos.rag.service;
 
 import br.com.bssantos.rag.dto.ChatRequest;
 import br.com.bssantos.rag.dto.ChatResponse;
+import br.com.bssantos.rag.dto.RetrievalResult;
 import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
 import br.com.bssantos.rag.observability.FailureStage;
 import br.com.bssantos.rag.observability.QueryMetric;
 import br.com.bssantos.rag.observability.QueryMetricsService;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.EmbeddingStore;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -22,87 +15,54 @@ import java.util.List;
 @Service
 public class QueryService {
 
-    private final EmbeddingModel embeddingModel;
+    private final ContextRetrievalService contextRetrievalService;
     private final ChatService chatService;
-    private final EmbeddingStore<TextSegment> embeddingStore;
     private final QueryMetricsService queryMetricsService;
 
-    public QueryService(@Qualifier("embeddingQuery") EmbeddingModel embeddingModel,
+    public QueryService(ContextRetrievalService contextRetrievalService,
                         ChatService chatService,
-                        EmbeddingStore<TextSegment> embeddingStore,
                         QueryMetricsService queryMetricsService) {
-        this.embeddingModel = embeddingModel;
+        this.contextRetrievalService = contextRetrievalService;
         this.chatService = chatService;
-        this.embeddingStore = embeddingStore;
         this.queryMetricsService = queryMetricsService;
     }
 
     public ChatResponse askIA(ChatRequest request, String sessionId) {
         long startNanos = System.nanoTime();
-        int matchesCount = 0;
-        List<Double> scores = List.of();
-        List<String> titulos = List.of();
+        RetrievalResult retrievalResult = null;
         FailureStage failureStage = FailureStage.LLM;
-
         try {
-            failureStage = FailureStage.EMBED;
-            Embedding embedding = embed(request);
+            retrievalResult = contextRetrievalService.buildContext(request);
+            ChatResponse response = chatService.ask(request.query(), retrievalResult.context(), sessionId);
+            failureStage = FailureStage.NONE;
+            return response;
 
-            failureStage = FailureStage.SEARCH;
-            List<EmbeddingMatch<TextSegment>> result = result(searchRequest(embedding));
-            matchesCount = result.size();
-            scores = result.stream().map(EmbeddingMatch::score).toList();
-            titulos = result.stream()
-                    .map(m -> m.embedded().metadata().getString("titulo")).toList();
+        } catch (FalhaNoProcessamentoException ex) {
+            failureStage = ex.getFailureStage();
+            throw ex;
 
-            if (result.isEmpty()) {
-                failureStage = FailureStage.EMPTY;
-                throw new FalhaNoProcessamentoException("Nenhum conteúdo relevante encontrado nas suas anotações para responder essa pergunta");
-            }
-            try {
-                ChatResponse response = chatService.ask(request.query(), result, sessionId);
-                failureStage = FailureStage.NONE;
-                return response;
-            } catch (RuntimeException ex) {
-                throw new FalhaNoProcessamentoException("Houve um problema na comunicação com a API da LLM", ex);
-            }
+        } catch (RuntimeException ex) {
+            throw new FalhaNoProcessamentoException("Falha ao tentar conexão com LLM", FailureStage.LLM);
 
         } finally {
-            QueryMetric queryMetric = new QueryMetric(Instant.now(),
-                    (System.nanoTime() - startNanos) / 1_000_000,
-                    matchesCount,
-                    scores,
-                    titulos,
-                    failureStage
-            );
+            QueryMetric queryMetric;
+            if (retrievalResult != null) {
+                queryMetric = new QueryMetric(Instant.now(),
+                        (System.nanoTime() - startNanos) / 1_000_000,
+                        retrievalResult.matchesCount(),
+                        retrievalResult.scores(),
+                        retrievalResult.titulos(),
+                        failureStage
+                );
+            } else {
+                queryMetric = new QueryMetric(Instant.now(),
+                        (System.nanoTime() - startNanos) / 1_000_000,
+                        0,
+                        List.of(),
+                        List.of(),
+                        failureStage);
+            }
             queryMetricsService.record(queryMetric);
-        }
-
-    }
-
-    private List<EmbeddingMatch<TextSegment>> result(EmbeddingSearchRequest searchRequest) {
-        try {
-            EmbeddingSearchResult<TextSegment> searchResult = embeddingStore.search(searchRequest);
-            return searchResult.matches();
-        } catch (RuntimeException ex) {
-            if (ex instanceof FalhaNoProcessamentoException) throw ex;
-            throw new FalhaNoProcessamentoException("Estamos enfrentando problema com a conexão com o banco de dados");
-        }
-    }
-
-    private EmbeddingSearchRequest searchRequest(Embedding embedding) {
-        return EmbeddingSearchRequest.builder()
-                .queryEmbedding(embedding)
-                .maxResults(6)
-                .minScore(0.5)
-                .build();
-    }
-
-    private Embedding embed(ChatRequest request) {
-        try {
-            return embeddingModel.embed(request.query()).content();
-        } catch (RuntimeException ex) {
-            throw new FalhaNoProcessamentoException("Estamos enfrentando problemas com a API da CohereClient. Tente novamente mais tarde");
         }
     }
 }

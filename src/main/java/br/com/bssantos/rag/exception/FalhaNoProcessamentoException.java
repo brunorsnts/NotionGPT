@@ -8,16 +8,21 @@ public class FalhaNoProcessamentoException extends RuntimeException {
 
     public FalhaNoProcessamentoException(String message) {
         super(message);
-        this.failureStage = FailureStage.NONE;
+        this.failureStage = FailureStage.UNKNOWN;
     }
 
     public FalhaNoProcessamentoException(String message, Throwable cause) {
         super(message, cause);
-        this.failureStage = FailureStage.NONE;
+        this.failureStage = FailureStage.UNKNOWN;
     }
 
     public FalhaNoProcessamentoException(String message, FailureStage failureStage) {
         super(message);
+        this.failureStage = failureStage;
+    }
+
+    public FalhaNoProcessamentoException(String message, Throwable throwable, FailureStage failureStage) {
+        super(message, throwable);
         this.failureStage = failureStage;
     }
 

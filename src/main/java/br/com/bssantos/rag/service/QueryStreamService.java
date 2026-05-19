@@ -6,7 +6,6 @@ import br.com.bssantos.rag.exception.FalhaNoProcessamentoException;
 import br.com.bssantos.rag.observability.FailureStage;
 import br.com.bssantos.rag.observability.MetricCollector;
 import br.com.bssantos.rag.observability.QueryMetricsService;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,6 +61,7 @@ public class QueryStreamService {
                         try {
                             emitter.send(SseEmitter.event().name("token").data(objectMapper.writeValueAsString(token)));
                         } catch (Exception e) {
+                            log.warn("Failed to send 'token' SSE event for session {}: {}", sessionId, e.getMessage());
                             if (emitterDone.compareAndSet(false, true)) {
                                 emitter.completeWithError(e);
                             }
@@ -92,14 +92,25 @@ public class QueryStreamService {
                     })
                     .start();
             return emitter;
+
+        // Vem antes de RuntimeException por conta da hierarquia.
         } catch (FalhaNoProcessamentoException ex) {
+            log.error("Ocorreu um erro inesperado durante o streaming para a sessão: {}", sessionId, ex);
             metricCollector.flush(queryMetricsService, ex.getFailureStage());
-            try { emitter.send(SseEmitter.event().name("error").data(ex.getMessage())); } catch (IOException ignored) {}
+            try {
+                emitter.send(SseEmitter.event().name("error").data(ex.getMessage()));
+            } catch (IOException ignored) {
+                log.warn("Failed to send SSE error event for session {}: {}", sessionId, ignored.getMessage());
+            }
             emitter.completeWithError(ex);
             return emitter;
         } catch (RuntimeException ex) {
-            metricCollector.flush(queryMetricsService, FailureStage.EMBED);
-            try { emitter.send(SseEmitter.event().name("error").data(ex.getMessage())); } catch (IOException ignored) {}
+            log.error("Ocorreu um erro inesperado durante o streaming para a sessão: {}", sessionId, ex);
+            metricCollector.flush(queryMetricsService, FailureStage.UNKNOWN);
+            try { emitter.send(SseEmitter.event().name("error").data(ex.getMessage()));
+            } catch (IOException ignored) {
+                log.warn("Failed to send SSE error event for session {}: {}", sessionId, ignored.getMessage());
+            }
             emitter.completeWithError(ex);
             return emitter;
         }

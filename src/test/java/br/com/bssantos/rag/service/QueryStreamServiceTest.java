@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -246,10 +247,92 @@ class QueryStreamServiceTest {
         ordem.verify(emitter).completeWithError(any(FalhaNoProcessamentoException.class));
     }
 
+    // --- Testes RED: classificação correta de FailureStage por tipo de exceção ---
+
+    @Test
+    void askStreaming_gravaMétricaComEMBED_quandoFalhaNoProcessamentoTemStageEMBED() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any(ChatRequest.class)))
+                .thenThrow(new FalhaNoProcessamentoException("falha no embedding", FailureStage.EMBED));
+        SseEmitter emitter = mock(SseEmitter.class);
+        ArgumentCaptor<QueryMetric> metricCaptor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert
+        verify(queryMetricsService).record(metricCaptor.capture());
+        assertThat(metricCaptor.getValue().failureStage()).isEqualTo(FailureStage.EMBED);
+    }
+
+    @Test
+    void askStreaming_gravaMétricaComSEARCH_quandoFalhaNoProcessamentoTemStageSEARCH() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any(ChatRequest.class)))
+                .thenThrow(new FalhaNoProcessamentoException("falha na busca vetorial", FailureStage.SEARCH));
+        SseEmitter emitter = mock(SseEmitter.class);
+        ArgumentCaptor<QueryMetric> metricCaptor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert
+        verify(queryMetricsService).record(metricCaptor.capture());
+        assertThat(metricCaptor.getValue().failureStage()).isEqualTo(FailureStage.SEARCH);
+    }
+
+    @Test
+    void askStreaming_gravaMétricaComEMPTY_quandoFalhaNoProcessamentoTemStageEMPTY() {
+        // Arrange
+        when(contextRetrievalService.buildContext(any(ChatRequest.class)))
+                .thenThrow(new FalhaNoProcessamentoException("nenhum resultado encontrado", FailureStage.EMPTY));
+        SseEmitter emitter = mock(SseEmitter.class);
+        ArgumentCaptor<QueryMetric> metricCaptor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert
+        verify(queryMetricsService).record(metricCaptor.capture());
+        assertThat(metricCaptor.getValue().failureStage()).isEqualTo(FailureStage.EMPTY);
+    }
+
+    @Test
+    void askStreaming_gravaMétricaComUNKNOWN_quandoRuntimeExceptionNaoClassificavel() {
+        // Arrange — exceção genérica sem relação com embedding (ex: NPE, erro de serialização)
+        when(contextRetrievalService.buildContext(any(ChatRequest.class)))
+                .thenThrow(new NullPointerException("referência nula inesperada"));
+        SseEmitter emitter = mock(SseEmitter.class);
+        ArgumentCaptor<QueryMetric> metricCaptor = ArgumentCaptor.forClass(QueryMetric.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert — deve gravar UNKNOWN, não EMBED
+        verify(queryMetricsService).record(metricCaptor.capture());
+        assertThat(metricCaptor.getValue().failureStage()).isEqualTo(FailureStage.UNKNOWN);
+    }
+
+    @Test
+    void askStreaming_completaEmitterComErro_quandoRuntimeExceptionNaoClassificavel() {
+        // Arrange — qualquer RuntimeException que não seja FalhaNoProcessamentoException
+        RuntimeException erroInesperado = new IllegalStateException("estado inválido no pipeline");
+        when(contextRetrievalService.buildContext(any(ChatRequest.class)))
+                .thenThrow(erroInesperado);
+        SseEmitter emitter = mock(SseEmitter.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert — o emitter deve ser encerrado com erro
+        verify(emitter).completeWithError(any(IllegalStateException.class));
+        verify(streamingChatService, never()).stream(any(ChatRequest.class), any(), anyString());
+    }
+
     @Test
     @SuppressWarnings("unchecked")
-    void askStreaming_completaEmitterUmaVez_quandoOnCompleteEOnErrorDisparamJuntos() throws Exception {
-        // Arrange — TokenStream que dispara onCompleteResponse e onError em sequência
+    void askStreaming_completaEmitter_quandoOnCompleteChegaPrimeiro() throws Exception {
+        // Arrange — onCompleteResponse dispara antes de onError
         configurarContextoValido();
         TokenStream tokenStream = mock(TokenStream.class);
         when(tokenStream.onPartialResponse(any())).thenReturn(tokenStream);
@@ -269,8 +352,47 @@ class QueryStreamServiceTest {
         // Act
         queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
 
-        // Assert — AtomicBoolean garante que apenas a primeira conclusão é aplicada
+        // Assert — complete() vence pois chegou primeiro; completeWithError nunca é chamado
         verify(emitter, times(1)).complete();
         verify(emitter, never()).completeWithError(any(Throwable.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void askStreaming_completaEmitterComErro_quandoOnErrorChegaPrimeiro() throws Exception {
+        // Arrange — onError é invocado antes de onCompleteResponse via start()
+        configurarContextoValido();
+        TokenStream tokenStream = mock(TokenStream.class);
+        when(tokenStream.onPartialResponse(any())).thenReturn(tokenStream);
+
+        // Captura os handlers sem disparar imediatamente
+        AtomicReference<Consumer<Throwable>> onErrorRef = new AtomicReference<>();
+        AtomicReference<Consumer<dev.langchain4j.model.chat.response.ChatResponse>> onCompleteRef = new AtomicReference<>();
+        doAnswer(inv -> { onCompleteRef.set(inv.getArgument(0)); return tokenStream; }).when(tokenStream).onCompleteResponse(any());
+        doAnswer(inv -> { onErrorRef.set(inv.getArgument(0)); return tokenStream; }).when(tokenStream).onError(any());
+
+        // start() controla a ordem: onError dispara primeiro
+        doAnswer(inv -> {
+            onErrorRef.get().accept(new RuntimeException("erro primeiro"));
+            onCompleteRef.get().accept(null);
+            return null;
+        }).when(tokenStream).start();
+
+        when(streamingChatService.stream(any(ChatRequest.class), any(RetrievalResult.class), anyString())).thenReturn(tokenStream);
+        SseEmitter emitter = mock(SseEmitter.class);
+
+        // Act
+        queryStreamService.askStreaming(new ChatRequest("pergunta"), "sessao-1", emitter);
+
+        // Assert — completeWithError() vence pois onError chegou primeiro; complete nunca é chamado
+        verify(emitter, times(1)).completeWithError(any(Throwable.class));
+        verify(emitter, never()).complete();
+
+        // Documenta o comportamento atual de double-flush:
+        // onError chama metricCollector.flush(LLM) → AtomicBoolean false→true → record() chamado (1ª vez)
+        // onCompleteResponse chama metricCollector.flush(NONE) → AtomicBoolean já true → guard retorna,
+        // record() NÃO é chamado de novo. O double-flush ocorre no nível do MetricCollector, mas o
+        // AtomicBoolean interno garante que queryMetricsService.record() seja invocado exatamente uma vez.
+        verify(queryMetricsService, times(1)).record(any(QueryMetric.class));
     }
 }
